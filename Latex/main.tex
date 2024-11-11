@@ -1,0 +1,683 @@
+\documentclass[a4paper, 11pt]{article}
+%twocolumn
+\input{preamble}
+
+\title{Randomized Algorithms (RA-MIRI): \\
+        Assignment \#2
+        }
+\author{%   
+    Marc Díaz (marc.diaz.calderon@estudiantat.upc.edu) 
+}
+\date{November 2024}
+
+\begin{document}
+
+\maketitle
+
+\section{Code Solution}
+
+The class \texttt{GaltonBoard} will be in charge of performing the simulations. In its constructor we can specify the following parameters:
+\begin{enumerate}
+    \item The number of bins to use. This sets the \texttt{number\_of\_bins\_} variable and initializes the vector \texttt{bins\_}, which will contain the number of balls in each bin.
+    \item The number of balls to throw, which sets the \texttt{balls\_} variable.
+    \item The allocation scheme to use. This can accept either a real value \( \beta \in (0,1) \) for the \( (1+\beta)\)-choice scheme or an integer \( d \geq 1 \) for the d-choice scheme.
+    \item Lastly, an integer \( k \in \{0,1,2\} \) to model the uncertainty. A value of 0 indicates no uncertainty, while 1 or 2 represents the number of questions asked following the assignment.
+\end{enumerate}
+
+The main function creates a simulation environment for various values of \( n \in [0,m^2]\), where \( m \) is the number of bins in the simulation. Each simulation is repeated \( T \) times, with \( T \) defaulting to 100 trials. For each simulation, we instantiate the \texttt{GaltonBoard} class, call the \texttt{Run()} method, and gather the maximum gap using \texttt{CalculateMaxGap()}. The average maximum gap is computed over the 100 trials and saved in a CSV file.
+
+The \texttt{Run()} method can be found in the following pseudocode \ref{algo:galtonRun}.  This function accepts a parameter \texttt{batch\_size}, specifying the number of balls to process per batch without immediately updating the \texttt{bins\_} vector.
+\begin{algorithm}[h]
+    \caption{Simulation - Run Function}
+    \label{algo:galtonRun}
+    \SetAlgoLined  
+    \SetKwInOut{Input}{Input}
+    \SetKwInOut{Output}{Output}
+    
+    \Input{$\mathit{batch\_size}$ -- number of balls processed per batch; default is 1 ball per batch}
+    \Output{Updated bin counts in array $\mathit{bins\_}$}
+    
+    \BlankLine
+
+    \SetKwData{BatchSize}{batch\_size}
+    \SetKwData{FullBatches}{full\_batches}
+    \SetKwData{RemainingBalls}{remaining\_balls}
+    \SetKwData{NumberBalls}{number\_of\_balls}
+    
+    \FullBatches $\gets$ \NumberBalls / \BatchSize  \;
+    \RemainingBalls $\gets$ \NumberBalls \% \BatchSize\;
+
+    \BlankLine
+    
+    \For{$b = 0$ \KwTo \FullBatches}{
+        Call \texttt{SimulateBatch} with \BatchSize\;
+    }
+    
+    \If{\RemainingBalls $>$ 0}{
+        Call \texttt{SimulateBatch} with \RemainingBalls\;
+    }
+\end{algorithm}
+
+The \texttt{SimulateBatch()} method is the core function. It first selects the number of randomly chosen bins based on the scheme specified in the constructor. If uncertainty \(k > 0\) is used, the function \texttt{ChooseBinUncertainty()} selects the bin for each ball; otherwise, \texttt{ChooseBin()} is called. After processing each batch, the \texttt{bins\_} vector is updated for the next batch.
+
+\begin{algorithm}[h]
+    \caption{Galton Board Simulation - Simulate Batch}
+    \label{algo:simulateBatch}
+    \SetAlgoLined  
+    \SetKwInOut{Input}{Input}
+    \SetKwInOut{Output}{Output}
+    
+    \Input{$\mathit{batch\_size}$ -- number of balls in this batch}
+    \Output{Updated bin counts after simulating one batch}
+    
+    \BlankLine
+    
+    \SetKwData{BatchCounts}{batch\_counts}
+    \SetKwData{ChosenBins}{chosen\_bins}
+    \SetKwData{ChosenBin}{chosen\_bin}
+    \SetKwData{NumberPossibleBins}{number\_possible\_bins}
+    
+    \For{$i \gets 0$ \KwTo $\mathit{batch\_size}$}{
+        \NumberPossibleBins $\gets$ Result of \texttt{ChooseScheme()}\;
+        \ChosenBins $\gets$ Randomly chosen bins via rejection method (total count is \NumberPossibleBins)\;
+        
+        \BlankLine
+        \tcp{Select appropriate bin based on $k\_choices$}
+        \BatchCounts[i] $\gets$ \eIf{$k\_choices = 0$}{
+            \texttt{ChooseBin} from \ChosenBins\;
+        }{
+            \texttt{ChooseBinUncertainty} from \ChosenBins\;
+        }
+    }  
+    
+    \BlankLine
+    \tcp{Update bin counts}
+    \ForEach{\ChosenBin in \BatchCounts}{
+        Increment $\mathit{bins}[\ChosenBin]$\;
+    }
+\end{algorithm}
+
+Finally, to analyse the evolution of the Gap, for each number \( N \) of balls, we calculate the maximum gap using \texttt{CalculateMaxGap()} as previously described. The formula for the gap is:
+\begin{equation}
+    G_n = \max_{1\leq i \leq n} \biggl\{ X_i(n) - \frac{n}{m} \biggl\}
+\end{equation}
+\begin{algorithm}[h]
+    \caption{Galton Board Simulation - Calculate Max Gap}
+    \label{algo:calculateMaxGap}
+    \SetAlgoLined  
+    \SetKwInOut{Input}{Input}
+    \SetKwInOut{Output}{Output}
+    
+    \Input{$\mathit{load\_factor}$ -- average expected bin load}
+    \Output{Maximum gap between bin load and load factor}
+    
+    \BlankLine
+
+    \SetKwData{MaxGap}{max\_gap}
+    \SetKwData{BinCount}{bin\_count}
+    \SetKwData{Gap}{gap}
+    
+    \MaxGap $\gets 0$\;
+    
+    \ForEach{\BinCount in bins}{
+        \Gap $\gets$ Difference between \BinCount and $\mathit{load\_factor}$\;
+        \If{\Gap $>$ \MaxGap}{
+            \MaxGap $\gets$ \Gap\;
+        }
+    }
+
+    \Return \MaxGap\;
+\end{algorithm}
+
+The code solution has been implemented in C++ and can be found in \href{https://github.com/MDCmarc/RA-Assigment1}{this GitHub repo} - (https://github.com/MDCmarc/RA-Assigment1). 
+For random number generation, we utilized the \texttt{mt19937} random engine, which is based on the classic Mersenne Twister algorithm~\cite{MersenneTwister}. 
+
+In the experimentation, to run each experiment and trial we used OpenMP for parallelization, as they are independent. However, parallelization was not applied within each simulation, as the probability of a ball landing in a bin depends on the outcomes of prior iterations.
+
+\clearpage
+\section{Experimentation}
+
+
+\subsection{Different Schemes Comparison}
+
+Figure \ref{fig:normal_d=1} and \ref{fig:normal_d=2} show the evolution of the average Gap for all the number of balls from $n=0$ to $n=m^2$ for the d-choice schema with values 1 and 2 respectively. We are using 25 bins for the experimentation hence the 625 balls. As we can clearly see, only adding one more choice brings down the factor when $n=m$ to half of what we had and almost 10 times less when $n=m^2$.
+
+% D = 1
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+    \pgfplotstableread[col sep=comma]{Simulations2/simulation_d=1_normal.csv}\datatable
+    \pgfmathsetmacro{\nbins}{25}
+    \pgfmathsetmacro{\nm}{\nbins}
+    \pgfmathsetmacro{\nmsquared}{\nbins * \nbins}
+
+    % Retrieve averageMaxLoad values for n = m and n = m^2
+    \pgfplotstablegetelem{\nm}{averageMaxLoad}\of{\datatable}
+    \let\averageLoadNm=\pgfplotsretval
+    \pgfplotstablegetelem{\nmsquared}{averageMaxLoad}\of{\datatable}
+    \let\averageLoadNmSquared=\pgfplotsretval
+    
+    % Main plot
+    \begin{axis}[
+        xlabel={Number of Balls $n$},
+        ylabel={Average Gap $G_n$},
+        xmin=0, xmax=\nmsquared + 25, ymin=-1,
+        grid=major,
+        width=\textwidth, 
+        height=8cm,
+        legend style={at={(0.5,-0.2)}, anchor=north, legend columns=1},
+    ]
+    % Plot the average gap data
+    \addplot+[
+        mark=none,
+        color=blue,
+        thick,
+    ] table[x=balls, y=averageMaxLoad] {\datatable};
+    \addlegendentry{Average Gap $G_n$}
+
+    % Highlight and label the points at n = m and n = m^2
+    \addplot+[
+        only marks,
+        mark=square,
+        mark options={scale=1.2, fill=red},
+        color=red,
+        nodes near coords,
+    ] coordinates {(\nm, \averageLoadNm) (\nmsquared, \averageLoadNmSquared)};
+    \addlegendentry{Highlighted Points $n = m$ and $n = m^2$}
+
+    % Add vertical dotted lines for n = m and n = m^2
+    \addplot[dotted, thick, color=red, forget plot] coordinates {(\nm, -1) (\nm, \averageLoadNm)};
+    \addplot[dotted, thick, color=purple, forget plot] coordinates {(\nmsquared, -1) (\nmsquared, \averageLoadNmSquared)};
+
+    % Add horizontal dotted lines to show the y-values for n = m and n = m^2
+    \addplot[dotted, thick, color=red, forget plot] coordinates {(0, \averageLoadNm) (\nm, \averageLoadNm)};
+    \addplot[dotted, thick, color=purple, forget plot] coordinates {(0, \averageLoadNmSquared) (\nmsquared, \averageLoadNmSquared)};
+
+    % Plot the perfect balancing line at y=0
+    \addplot[
+        color=black,
+        dashed,
+        thick,
+    ] coordinates {(0, 0) (\nmsquared + 50, 0)};
+    \addlegendentry{Perfect Balancing Line $G_n = 0$}
+    \end{axis}
+\end{tikzpicture}
+\caption{Average Gap $G_n$ for 100 Trials and 25 Bins, d-Choice Scheme (d=1)}
+\label{fig:normal_d=1}
+\end{figure}
+% D = 2
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+    \pgfplotstableread[col sep=comma]{Simulations2/simulation_d=2_normal.csv}\datatable
+    \pgfmathsetmacro{\nbins}{25}
+    \pgfmathsetmacro{\nm}{\nbins}
+    \pgfmathsetmacro{\nmsquared}{\nbins * \nbins}
+
+    % Retrieve averageMaxLoad values for n = m and n = m^2
+    \pgfplotstablegetelem{\nm}{averageMaxLoad}\of{\datatable}
+    \let\averageLoadNm=\pgfplotsretval
+    \pgfplotstablegetelem{\nmsquared}{averageMaxLoad}\of{\datatable}
+    \let\averageLoadNmSquared=\pgfplotsretval
+    
+    % Main plot
+    \begin{axis}[
+        xlabel={Number of Balls $n$},
+        ylabel={Average Gap $G_n$},
+        xmin=0, xmax=\nmsquared + 25,
+        grid=major,
+        width=\textwidth, 
+        height=8cm,
+        legend style={at={(0.5,-0.2)}, anchor=north, legend columns=1},
+    ]
+    % Plot the average gap data
+    \addplot+[
+        mark=none,
+        color=blue,
+        thick,
+    ] table[x=balls, y=averageMaxLoad] {\datatable};
+    \addlegendentry{Average Gap $G_n$}
+
+    % Highlight and label the points at n = m and n = m^2
+    \addplot+[
+        only marks,
+        mark=square,
+        mark options={scale=1.2, fill=red},
+        color=red,
+        nodes near coords,
+    ] coordinates {(\nm, \averageLoadNm) (\nmsquared, \averageLoadNmSquared)};
+    \addlegendentry{Highlighted Points $n = m$ and $n = m^2$}
+
+    % Add vertical dotted lines for n = m and n = m^2
+    \addplot[dotted, thick, color=red, forget plot] coordinates {(\nm, 0) (\nm, \averageLoadNm)};
+    \addplot[dotted, thick, color=purple, forget plot] coordinates {(\nmsquared, 0) (\nmsquared, \averageLoadNmSquared)};
+
+    % Add horizontal dotted lines to show the y-values for n = m and n = m^2
+    \addplot[dotted, thick, color=red, forget plot] coordinates {(0, \averageLoadNm) (\nm, \averageLoadNm)};
+    \addplot[dotted, thick, color=purple, forget plot] coordinates {(0, \averageLoadNmSquared) (\nmsquared, \averageLoadNmSquared)};
+
+    % Plot the perfect balancing line at y=0
+    \addplot[
+        color=black,
+        dashed,
+        thick,
+    ] coordinates {(0, 0) (\nmsquared + 50, 0)};
+    \addlegendentry{Perfect Balancing Line $G_n = 0$}
+    \end{axis}
+\end{tikzpicture}
+\caption{Average Gap $G_n$ for 100 Trials and 25 Bins, d-Choice Scheme (d=2)}
+\label{fig:normal_d=2}
+\end{figure}
+
+If instead of the d-choice scheme we use the \( (1+\beta)\)-choice scheme the average Gap will vary, depending on the value of \(\beta\), within the results obtained with d=1 and d=2 we showed before. Figure~\ref{fig:normal_betas} shows the evolution of the average Gap for all the number of balls from $n=0$ to $n=m^2$ again for the  diferent \(\beta\) values from $0.1$ to $0.9$. As expected, the higher the \(\beta\), the closer we get to d=1-scheme hence the worst we will perform.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+    % Beta values
+    \pgfmathsetmacro{\betaCount}{9}
+    \pgfmathsetmacro{\nbins}{25}
+    \pgfmathsetmacro{\nm}{\nbins}
+    \pgfmathsetmacro{\nmsquared}{\nbins * \nbins}
+
+    \begin{axis}[
+        xlabel={Number of Balls $n$},
+        ylabel={Average Gap $G_n$},
+        xmin=0, xmax=\nmsquared + 25, ymin=1,
+        ytick={1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7, 7.5, 8, 8.5, 9},
+        grid=major,
+        width=\textwidth, 
+        height=10cm,
+        legend style={at={(0.5,-0.2)}, anchor=north, legend columns=5, column sep=1ex, font=\footnotesize},
+        cycle list name=color list, % Use predefined color cycle
+    ]
+    % Loop through the Beta values and plot them
+    \foreach \i in {1,...,\betaCount} {
+        \pgfplotstableread[col sep=comma]{Simulations2/Betas/simulation_beta\i_normal.csv}\datatable
+        \addplot+[
+            mark=none,
+            thick,
+        ] table[x=balls, y=averageMaxLoad] {\datatable};
+        \addlegendentryexpanded{$\beta = 0.$\i}
+    }
+    \end{axis}
+\end{tikzpicture}
+\caption{Average Gap $G_n$ for 100 Trials and 25 Bins for different $\beta$ values}
+\label{fig:normal_betas}
+\end{figure}
+
+
+Lastly, Table~\ref{tab:comparison-normal-delta} shows the average Gap value of the 100 trials for the critical values $n=m$ and $n=m^2$ for different delta values. As expected, the higher the delta, i.e. the number of bins to choose from, the better we will do spreading the load equally among the bins.
+\begin{table}[H]
+    \centering
+    \begin{tabular}{|c|c c|}
+        \hline
+        \textbf{$d$ Value} & $n = m$ & $n = m^2$ \\ \hline
+        \textbf{3} & 1.0 & 1.01 \\ \hline
+        \textbf{4} & 1.0 & 1.0 \\ \hline
+        \textbf{5} & 1.0 & 1.0 \\ \hline
+        \textbf{6} & 1.0 & 0.98 \\ \hline
+        \textbf{7} & 0.98 & 0.96 \\ \hline
+        \textbf{8} & 0.92 & 0.91 \\ \hline
+        \textbf{9} & 0.87 & 0.87 \\ \hline
+        \textbf{10} & 0.78 & 0.81 \\ \hline
+    \end{tabular}
+    \caption{Comparison of maximum gap values for greater d-values with $n = m$ and $n = m^2$.}
+    \label{tab:comparison-normal-delta}
+\end{table}
+
+\clearpage
+\subsection{Adding Uncertainty: B-batching}
+For the second part of the experiment we performed the same simulation of 100 trials with 25 bins for all balls from $n=0$ to $n=m^2$ but using batches. That means, we will throw the amount of balls specified in the batch size \textit{without updating the counts in the bins}. This will then make the experiment more erratic. 
+
+Table~\ref{tab:comparison-batched-beta} summarizes the critical points $n=m$ and $n=m^2$ for three different \(\beta\) values for different batches sizes that increase with the form $n=m, n=2m, \ldots, n=\lambda m$ being \(\lambda=25\). As we can see, the more decisions we make without having updated values, the worse we perform. 
+\begin{table}[H]
+    \centering
+    \begin{tabular}{|c||cc|cc|cc|}
+        \hline
+        \multirow{2}{*}{Batch Size} & \multicolumn{2}{c|}{$\mathbf{\beta = 0.25}$} & \multicolumn{2}{c|}{$\mathbf{\beta = 0.5}$} & \multicolumn{2}{c|}{$\mathbf{\beta = 0.75}$} \\ \cline{2-7}
+        & $n = m$ & $n = m^2$ & $n = m$ & $n = m^2$ & $n = m$ & $n = m^2$ \\ \hline
+        \textbf{25} & 2.42 & 2.75 & 2.31 & 3.58 & 2.45 & 5.92 \\ \hline
+        \textbf{50} & 2.38 & 3.08 & 2.33 & 3.94 & 2.44 & 6.36 \\ \hline
+        \textbf{75} & 2.38 & 3.54 & 2.37 & 3.91 & 2.32 & 6.45 \\ \hline
+        \textbf{100} & 2.4 & 3.9 & 2.4 & 4.56 & 2.4 & 6.79 \\ \hline
+        \textbf{125} & 2.38 & 5.52 & 2.38 & 5.17 & 2.4 & 6.99 \\ \hline
+        \textbf{150} & 2.42 & 5.23 & 2.4 & 5.33 & 2.46 & 7.2 \\ \hline
+        \textbf{175} & 2.45 & 5.06 & 2.32 & 5.08 & 2.31 & 7.14 \\ \hline
+        \textbf{200} & 2.42 & 6.18 & 2.41 & 5.7 & 2.38 & 7.12 \\ \hline
+        \textbf{225} & 2.44 & 6.1 & 2.31 & 6.25 & 2.41 & 6.96 \\ \hline
+        \textbf{250} & 2.3 & 5.75 & 2.36 & 6.01 & 2.31 & 7.61 \\ \hline
+        \textbf{275} & 2.3 & 7.33 & 2.31 & 6.66 & 2.25 & 7.73 \\ \hline
+        \textbf{300} & 2.38 & 9.19 & 2.5 & 7.68 & 2.27 & 7.75 \\ \hline
+        \textbf{325} & 2.35 & 9.31 & 2.39 & 7.57 & 2.31 & 7.94 \\ \hline
+        \textbf{350} & 2.32 & 8.55 & 2.24 & 7.38 & 2.45 & 8.42 \\ \hline
+        \textbf{375} & 2.39 & 8.0 & 2.33 & 6.73 & 2.28 & 8.29 \\ \hline
+        \textbf{400} & 2.42 & 7.15 & 2.34 & 6.92 & 2.32 & 8.71 \\ \hline
+        \textbf{425} & 2.35 & 6.64 & 2.47 & 7.13 & 2.46 & 8.94 \\ \hline
+        \textbf{450} & 2.29 & 6.41 & 2.34 & 7.07 & 2.4 & 8.5 \\ \hline
+        \textbf{475} & 2.37 & 6.44 & 2.33 & 7.33 & 2.28 & 8.75 \\ \hline
+        \textbf{500} & 2.51 & 6.36 & 2.38 & 7.8 & 2.42 & 8.69 \\ \hline
+        \textbf{525} & 2.32 & 7.08 & 2.38 & 8.23 & 2.37 & 9.32 \\ \hline
+        \textbf{550} & 2.45 & 7.58 & 2.42 & 8.07 & 2.38 & 9.2 \\ \hline
+        \textbf{575} & 2.46 & 8.47 & 2.31 & 9.13 & 2.38 & 9.77 \\ \hline
+        \textbf{600} & 2.34 & 9.25 & 2.47 & 10.04 & 2.37 & 9.79 \\ \hline
+        \textbf{625} & 2.48 & 10.42 & 2.44 & 10.56 & 2.38 & 10.02 \\ \hline
+    \end{tabular}
+    \caption{Comparison of maximum gap values for different batch sizes and beta values with $n = m$ and $n = m^2$.}
+    \label{tab:comparison-batched-beta}
+\end{table}
+
+The exact same process has been used to generate Table~\ref{tab:comparison-batched-d}, now for different values of $d$ for the $d$-scheme. As we can see, the more decisions we make without updating the values, the worse the performance becomes. However, another interesting observation is that the worst values are not seen in the largest batch sizes, but rather in the middle of the table.
+
+This can be explained by the fact that we are making only 2 choices. The first choice allocates the balls randomly. If we are lucky, the allocation will follow something close to a uniform distribution across all bins. However, during the second allocation, the algorithm prioritizes placing the balls into the least-filled bins. Since we still need to add around 300 balls, all of them will be allocated to a small subset of bins that were less populated in the first allocation.
+
+Following this reasoning, increasing the number $d$ of choices amplifies the chances of selecting the \textbf{lowest} bin from all available bins, which leads to placing all the balls there. This explains why, for batch sizes between 250 and 450, particularly around batch sizes 300-325, we see worse values, with gap values reaching as high as 42.14 in batch size 325 with $d=5$.
+
+\begin{table}[H]
+    \centering
+    \begin{tabular}{|c||cc|cc|cc|cc|}
+        \hline
+        \multirow{2}{*}{Batch Size} & \multicolumn{2}{c|}{$\mathbf{d = 2}$} & \multicolumn{2}{c|}{$\mathbf{d = 3}$} & \multicolumn{2}{c|}{$\mathbf{d = 4}$} & \multicolumn{2}{c|}{$\mathbf{d = 5}$} \\ \cline{2-9}
+        & $n = m$ & $n = m^2$ & $n = m$ & $n = m^2$ & $n = m$ & $n = m^2$ & $n = m$ & $n = m^2$\\ \hline
+        \textbf{25} & 2.36 & 2.43 & 2.27 & 2.53 & 2.49 & 3.08 & 2.42 & 3.51 \\ \hline
+        \textbf{50} & 2.45 & 2.82 & 2.32 & 3.39 & 2.38 & 4.41 & 2.32 & 5.59 \\ \hline
+        \textbf{75} & 2.52 & 3.46 & 2.38 & 4.81 & 2.48 & 6.45 & 2.35 & 8.21 \\ \hline
+        \textbf{100} & 2.4 & 4.22 & 2.41 & 6.44 & 2.27 & 8.46 & 2.39 & 10.85 \\ \hline
+        \textbf{125} & 2.34 & 5.51 & 2.43 & 8.56 & 2.29 & 11.19 & 2.23 & 13.35 \\ \hline
+        \textbf{150} & 2.41 & 5.48 & 2.29 & 8.63 & 2.39 & 11.42 & 2.35 & 15.57 \\ \hline
+        \textbf{175} & 2.36 & 4.87 & 2.45 & 7.86 & 2.28 & 12.07 & 2.37 & 17.32 \\ \hline
+        \textbf{200} & 2.41 & 7.02 & 2.48 & 11.79 & 2.29 & 17.19 & 2.43 & 22.81 \\ \hline
+        \textbf{225} & 2.28 & 6.59 & 2.46 & 11.49 & 2.3 & 17.81 & 2.49 & 25.27 \\ \hline
+        \textbf{250} & 2.3 & 6.01 & 2.42 & 12.88 & 2.33 & 20.98 & 2.38 & 29.59 \\ \hline
+        \textbf{275} & 2.46 & 8.16 & 2.43 & 16.67 & 2.3 & 25.47 & 2.31 & 35.9 \\ \hline
+        \textbf{300} & 2.3 & 10.95 & 2.3 & 20.13 & 2.49 & 30.72 & 2.37 & 41.25 \\ \hline
+        \textbf{325} & 2.28 & 12.27 & 2.35 & 20.42 & 2.31 & 31.0 & 2.38 & 42.14 \\ \hline
+        \textbf{350} & 2.39 & 10.45 & 2.4 & 19.27 & 2.42 & 28.17 & 2.47 & 39.16 \\ \hline
+        \textbf{375} & 2.34 & 9.29 & 2.37 & 17.43 & 2.36 & 24.45 & 2.36 & 33.09 \\ \hline
+        \textbf{400} & 2.33 & 8.37 & 2.28 & 14.14 & 2.43 & 21.41 & 2.37 & 29.76 \\ \hline
+        \textbf{425} & 2.35 & 7.28 & 2.36 & 12.67 & 2.23 & 18.7 & 2.37 & 25.26 \\ \hline
+        \textbf{450} & 2.43 & 6.51 & 2.39 & 10.62 & 2.31 & 15.93 & 2.34 & 22.4 \\ \hline
+        \textbf{475} & 2.37 & 5.98 & 2.27 & 8.63 & 2.33 & 12.55 & 2.21 & 16.77 \\ \hline
+        \textbf{500} & 2.34 & 5.83 & 2.37 & 7.02 & 2.33 & 10.39 & 2.41 & 13.01 \\ \hline
+        \textbf{525} & 2.38 & 6.15 & 2.49 & 6.27 & 2.41 & 7.89 & 2.33 & 10.12 \\ \hline
+        \textbf{550} & 2.36 & 6.76 & 2.39 & 6.52 & 2.36 & 6.84 & 2.35 & 7.55 \\ \hline
+        \textbf{575} & 2.31 & 7.89 & 2.53 & 7.69 & 2.33 & 8.05 & 2.47 & 7.82 \\ \hline
+        \textbf{600} & 2.46 & 9.43 & 2.38 & 9.06 & 2.37 & 9.64 & 2.47 & 8.74 \\ \hline
+        \textbf{625} & 2.28 & 10.07 & 2.46 & 10.59 & 2.47 & 9.89 & 2.39 & 10.33 \\ \hline
+    \end{tabular}
+    \caption{Comparison of maximum gap values for different batch sizes and d values with $n = m$ and $n = m^2$.}
+    \label{tab:comparison-batched-d}
+\end{table}
+
+
+\subsection{Another Way of Adding Uncertainty: Partial Information}
+ In the final part of the experiment, we will introduce another method for adding uncertainty to the allocation process. Unlike the previous approach, we will have all the bins updated without delay but, but instead of choosing in which bin to allocate the ball based on the exact number of balls already present in the bins, we will only be able to ask one or two questions (depending on the choice of $k$-value, either 1 or 2, respectively). The questions will be:
+\begin{enumerate} 
+    \item Is the number of balls in this bin higher or lower than the median of all bins? If only one question is allowed, we will select randomly from the bins that have fewer balls than the median. 
+    \item Is the number of balls in this bin higher or lower than the first or third quartile (depending on the outcome of the previous question)? 
+\end{enumerate}
+
+Algorithm~\ref{algo:chooseBinUncertainty} shows the pseudocode for selecting a bin according to these rules.
+
+To start, we will use the \texttt{QuickSelect} algorithm to find the median, first quartile (Q1), and third quartile (Q3) in\(mathcal{O}(n)\). Then, we will call the function \texttt{FilterAndReturn}, which updates the provided vector of bins by removing any bins that have a load \emph{equal to or greater} than the given filter value. Only the bins that have fewer balls than the filter value will remain in the vector. If no bins with fewer balls than the filter value are found, the vector remains unchanged. The function returns \texttt{true} if it found any bins below the filter value, or \texttt{false} if all bins have loads greater than or equal to the filter value.
+
+If only one question is allowed, we will return one randomly selected bin from the filtered set of bins. If two questions are allowed, we will first filter based on the quartile values and then return one bin selected randomly from the further filtered set.
+
+\begin{algorithm}[h]
+    \caption{Choose Bin with Uncertainty}
+    \label{algo:chooseBinUncertainty}
+    \SetAlgoLined  
+    \SetKwInOut{Input}{Input}
+    \SetKwInOut{Output}{Output}
+    
+    \Input{Set of chosen bins, $\mathit{chosen\_bins}$}
+    \Output{Selected bin with uncertainty handling}
+    
+    \BlankLine
+    
+    \SetKwData{CandidateBins}{candidate\_bins}
+    \SetKwData{AllLoads}{all\_loads}
+    \SetKwData{TotalBins}{total\_bins}
+    \SetKwData{MedianLoad}{median\_load}
+    \SetKwData{QFLoad}{q1\_load}
+    \SetKwData{QTLoad}{q3\_load}
+    \SetKwData{IsBelowMedian}{is\_below\_median}
+    
+    \BlankLine
+    
+    \tcp{Convert chosen bins to a vector for the FilterAndReturn function}
+    \CandidateBins $\gets$ Convert $\mathit{chosen\_bins}$ to a vector\;
+    
+    \BlankLine
+    \tcp{Calculate percentiles using QuickSelect}
+    \TotalBins $\gets$ Size of \AllLoads\;
+    \MedianLoad $\gets$ \texttt{quickSelect}(\AllLoads, 0, \TotalBins - 1, \TotalBins / 2)\;
+    \QFLoad $\gets$ \texttt{quickSelect}(\AllLoads, 0, \TotalBins - 1, \TotalBins / 4)\;
+    \QTLoad $\gets$ \texttt{quickSelect}(\AllLoads, 0, \TotalBins - 1, (3 * \TotalBins) / 4)\;
+    
+    \BlankLine
+    \tcp{First filter based on median load}
+    \IsBelowMedian $\gets$ \texttt{FilterAndReturn}(\CandidateBins, \MedianLoad)\;
+    \If{\IsBelowMedian and size of \CandidateBins is 1}{
+        \Return the only element in \CandidateBins\;
+    }
+    
+    \BlankLine
+    \If{$k\_choices = 1$}{
+        \Return \texttt{SelectRandom}(\CandidateBins)\;
+    }
+    
+    \BlankLine
+    \tcp{Second filter based on quartiles}
+    \If{\IsBelowMedian}{
+        \texttt{FilterAndReturn}(\CandidateBins, \QFLoad)\;
+    }
+    \Else{
+        \texttt{FilterAndReturn}(\CandidateBins, \QTLoad)\;
+    }
+    
+    \Return \texttt{SelectRandom}(\CandidateBins)\;
+
+\end{algorithm}
+
+As we did in the first experiment, Figures~\ref{fig:k=1_d=2} and \ref{fig:k=2_d=2} show the evolution of the average Gap over 100 trials for different ball counts, ranging from $n=0$ to $n=m^2$, with 25 bins under the d-choice scheme for $d=2$. The first figure represents the case with one available question ($K=1$), while the second shows the results with two questions ($K=2$).
+
+As observed, using two questions significantly reduces the Gap, nearly halving it when $n=m^2$. Comparing these results with those from the first experiment (without uncertainty), we get the following values for $n=m$ in order of no uncertainty, $K=2$, $K=1$: 1.13, 1.83, 2.21 and for $n=m^2$: 1.42, 2.36, 4.44. Then as expected, the introduction of uncertainty leads to worst results. 
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+    \pgfplotstableread[col sep=comma]{Simulations2/comparisons-k-delta/D2_K1.csv}\datatable
+    \pgfmathsetmacro{\nbins}{25}
+    \pgfmathsetmacro{\nm}{\nbins}
+    \pgfmathsetmacro{\nmsquared}{\nbins * \nbins}
+
+    % Retrieve averageMaxLoad values for n = m and n = m^2
+    \pgfplotstablegetelem{\nm}{averageMaxLoad}\of{\datatable}
+    \let\averageLoadNm=\pgfplotsretval
+    \pgfplotstablegetelem{\nmsquared}{averageMaxLoad}\of{\datatable}
+    \let\averageLoadNmSquared=\pgfplotsretval
+    
+    % Main plot
+    \begin{axis}[
+        xlabel={Number of Balls $n$},
+        ylabel={Average Gap $G_n$},
+        xmin=0, xmax=\nmsquared + 25,
+        grid=major,
+        width=\textwidth, 
+        height=8cm,
+        legend style={at={(0.5,-0.2)}, anchor=north, legend columns=1},
+    ]
+    % Plot the average gap data
+    \addplot+[
+        mark=none,
+        color=blue,
+        thick,
+    ] table[x=balls, y=averageMaxLoad] {\datatable};
+    \addlegendentry{Average Gap $G_n$}
+
+    % Highlight and label the points at n = m and n = m^2
+    \addplot+[
+        only marks,
+        mark=square,
+        mark options={scale=1.2, fill=red},
+        color=red,
+        nodes near coords,
+    ] coordinates {(\nm, \averageLoadNm) (\nmsquared, \averageLoadNmSquared)};
+    \addlegendentry{Highlighted Points $n = m$ and $n = m^2$}
+
+    % Add vertical dotted lines for n = m and n = m^2
+    \addplot[dotted, thick, color=red, forget plot] coordinates {(\nm, 0) (\nm, \averageLoadNm)};
+    \addplot[dotted, thick, color=purple, forget plot] coordinates {(\nmsquared, 0) (\nmsquared, \averageLoadNmSquared)};
+
+    % Add horizontal dotted lines to show the y-values for n = m and n = m^2
+    \addplot[dotted, thick, color=red, forget plot] coordinates {(0, \averageLoadNm) (\nm, \averageLoadNm)};
+    \addplot[dotted, thick, color=purple, forget plot] coordinates {(0, \averageLoadNmSquared) (\nmsquared, \averageLoadNmSquared)};
+
+    % Plot the perfect balancing line at y=0
+    \addplot[
+        color=black,
+        dashed,
+        thick,
+    ] coordinates {(0, 0) (\nmsquared + 50, 0)};
+    \addlegendentry{Perfect Balancing Line $G_n = 0$}
+    \end{axis}
+\end{tikzpicture}
+\caption{Average Gap $G_n$ for the 2-Choice Scheme Modelling Uncertainty with One Question (K=1)}
+\label{fig:k=1_d=2}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+    \pgfplotstableread[col sep=comma]{Simulations2/comparisons-k-delta/D2_K2.csv}\datatable
+    \pgfmathsetmacro{\nbins}{25}
+    \pgfmathsetmacro{\nm}{\nbins}
+    \pgfmathsetmacro{\nmsquared}{\nbins * \nbins}
+
+    % Retrieve averageMaxLoad values for n = m and n = m^2
+    \pgfplotstablegetelem{\nm}{averageMaxLoad}\of{\datatable}
+    \let\averageLoadNm=\pgfplotsretval
+    \pgfplotstablegetelem{\nmsquared}{averageMaxLoad}\of{\datatable}
+    \let\averageLoadNmSquared=\pgfplotsretval
+    
+    % Main plot
+    \begin{axis}[
+        xlabel={Number of Balls $n$},
+        ylabel={Average Gap $G_n$},
+        xmin=0, xmax=\nmsquared + 25,
+        grid=major,
+        width=\textwidth, 
+        height=8cm,
+        legend style={at={(0.5,-0.2)}, anchor=north, legend columns=1},
+    ]
+    % Plot the average gap data
+    \addplot+[
+        mark=none,
+        color=blue,
+        thick,
+    ] table[x=balls, y=averageMaxLoad] {\datatable};
+    \addlegendentry{Average Gap $G_n$}
+
+    % Highlight and label the points at n = m and n = m^2
+    \addplot+[
+        only marks,
+        mark=square,
+        mark options={scale=1.2, fill=red},
+        color=red,
+        nodes near coords,
+    ] coordinates {(\nm, \averageLoadNm) (\nmsquared, \averageLoadNmSquared)};
+    \addlegendentry{Highlighted Points $n = m$ and $n = m^2$}
+
+    % Add vertical dotted lines for n = m and n = m^2
+    \addplot[dotted, thick, color=red, forget plot] coordinates {(\nm, 0) (\nm, \averageLoadNm)};
+    \addplot[dotted, thick, color=purple, forget plot] coordinates {(\nmsquared, 0) (\nmsquared, \averageLoadNmSquared)};
+
+    % Add horizontal dotted lines to show the y-values for n = m and n = m^2
+    \addplot[dotted, thick, color=red, forget plot] coordinates {(0, \averageLoadNm) (\nm, \averageLoadNm)};
+    \addplot[dotted, thick, color=purple, forget plot] coordinates {(0, \averageLoadNmSquared) (\nmsquared, \averageLoadNmSquared)};
+
+    % Plot the perfect balancing line at y=0
+    \addplot[
+        color=black,
+        dashed,
+        thick,
+    ] coordinates {(0, 0) (\nmsquared + 50, 0)};
+    \addlegendentry{Perfect Balancing Line $G_n = 0$}
+    \end{axis}
+\end{tikzpicture}
+\caption{Average Gap $G_n$ for the 2-Choice Scheme Modelling Uncertainty with Two Question (K=2)}
+\label{fig:k=2_d=2}
+\end{figure}
+
+Completing the table we provided in the first experiment (Table~\ref{tab:comparison-normal-delta}), Table~\ref{tab:comparison-k-delta} shows the side by side comparison of $K=0$ (no uncertainty), $K=2$ and $K=1$ for more $d$ Values.
+
+\begin{table}[H]
+    \centering
+    \begin{tabular}{|c||cc|cc|cc|}
+        \hline
+        \multirow{2}{*}{$d$ Value} & \multicolumn{2}{c|}{$\mathbf{K=0}$} & \multicolumn{2}{c|}{$\mathbf{K=2}$} & \multicolumn{2}{c|}{$\mathbf{K=1}$} \\ \cline{2-7}
+        & $n = m$ & $n = m^2$ & $n = m$ & $n = m^2$ & $n = m$ & $n = m^2$ \\ \hline
+        \textbf{3} & 1.0 & 1.01   & 1.47 & 1.67 & 2.0 & 3.19 \\ \hline
+        \textbf{4} & 1.0 & 1.0   & 1.35 & 1.41   & 1.91 & 2.95 \\ \hline
+        \textbf{5} & 1.0 & 1.0    & 1.25 & 1.36   & 1.75 & 2.66  \\ \hline
+        \textbf{6} & 1.0 & 0.98   & 1.2 & 1.29   & 1.76 & 2.51 \\ \hline
+        \textbf{7} & 0.98 & 0.96  & 1.18 & 1.27   & 1.82 & 2.41 \\ \hline
+        \textbf{8} & 0.92 & 0.91  & 1.13 & 1.11   & 1.79 & 2.61 \\ \hline
+        \textbf{9} & 0.87 & 0.87  & 1.13 & 1.08  & 1.85 & 2.27 \\ \hline
+        \textbf{10} & 0.78 & 0.81 & 0.97 & 1.13  & 1.9 & 2.32 \\ \hline
+    \end{tabular}
+    \caption{Comparison of maximum gap values for different $d$ values for different levels of uncertainty at $n = m$ and $n = m^2$.}
+    \label{tab:comparison-k-delta}
+\end{table}
+\vspace{-1em}
+To end our experimentation we provide Figure~\ref{fig:k_betas} which shows the evolution of the average Gap for all the number of balls from $n=0$ to $n=m^2$ again for the different \(\beta\) values from $0.2, 0.4, 0.6, 0.8$ for both $K=1$ and $K=2$. As expected $K=1$ performs worse making \(\beta=0.4, K=2\) performing better than \(\beta=0.2, K=1\) altough having a lower \(\beta\) value.
+
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+    % Beta values
+    \pgfmathsetmacro{\nbins}{25}
+    \pgfmathsetmacro{\nm}{\nbins}
+    \pgfmathsetmacro{\nmsquared}{\nbins * \nbins}
+
+    \begin{axis}[
+        xlabel={Number of Balls $n$},
+        ylabel={Average Gap $G_n$},
+        xmin=0, xmax=\nmsquared + 25, ymin=1,
+        ytick={1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6, 6.5, 7, 7.5, 8, 8.5, 9},
+        grid=major,
+        width=\textwidth, 
+        height=10cm,
+        legend style={at={(0.5,-0.2)}, anchor=north, legend columns=4, column sep=1ex, font=\footnotesize},
+        cycle list name=color list, % Use predefined color cycle
+    ]
+    % Loop through the Beta values and plot them
+    \foreach \i in {2,4,6,8} {
+        \pgfplotstableread[col sep=comma]{Simulations2/comparisons-k-beta/B\i_K1.csv}\datatable
+        \addplot+[
+            mark=none,
+            thick,
+        ] table[x=balls, y=averageMaxLoad] {\datatable};
+        \addlegendentryexpanded{$\beta = 0.$\i, $K=1$}
+
+        \pgfplotstableread[col sep=comma]{Simulations2/comparisons-k-beta/B\i_K2.csv}\datatable
+        \addplot+[
+            mark=none,
+            thick,
+        ] table[x=balls, y=averageMaxLoad] {\datatable};
+        \addlegendentryexpanded{$\beta = 0.$\i, $K=2$}
+    }
+    \end{axis}
+\end{tikzpicture}
+\caption{Average Gap $G_n$ for 100 Trials and 25 Bins for different $\beta$ and $K$ values}
+\label{fig:k_betas}
+\end{figure}
+\vspace{-1em}
+\section{Used Tools}
+All the plots have been created using TikZ+PGF. The data has been generated from the C++ code and, for some tables, the python notebook \texttt{data.ipynb} has been used to parse the csv.
+
+\printbibliography
+
+\end{document}
